@@ -1,0 +1,86 @@
+﻿version: "3.9"
+
+services:
+  # 1. MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-todo
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: todo_db
+      MYSQL_USER: todo_user
+      MYSQL_PASSWORD: 123456
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -utodo_user -p123456 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - todo-network
+
+  # 2. Backend (Spring Boot)
+  backend:
+    build: ./todo-app-sever
+    container_name: todo-app-sever
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-todo:3306/todo_db?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: todo_user
+      SPRING_DATASOURCE_PASSWORD: 123456
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - todo-network
+
+  # 3. Frontend (React)
+  frontend:
+    build: ./todo-app-client
+    container_name: todo-app-client
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - todo-network
+
+  # 4. Jenkins CI/CD Server - THÊM VÀO ĐÂY
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    container_name: demo-jenkins
+    restart: unless-stopped
+    ports:
+      - "8081:8080"      # Jenkins UI
+      - "50000:50000"    # Agent port
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/var/jenkins_home/workspace/todo-app
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    user: root
+    privileged: true
+    networks:
+      - todo-network
+    depends_on:
+      - mysql
+      - backend
+      - frontend
+
+volumes:
+  mysql_data:
+    driver: local
+  jenkins_data:
+    driver: local
+
+networks:
+  todo-network:
+    driver: bridge

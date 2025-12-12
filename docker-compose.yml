@@ -80,6 +80,11 @@ volumes:
     driver: local
   jenkins_data:
     driver: local
+    volumes:
+  # mysql_data:
+  #   driver: local
+  # jenkins_data:
+  #   driver: local
 
 networks:
   todo-network:
